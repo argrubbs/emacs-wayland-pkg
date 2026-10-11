@@ -1,0 +1,58 @@
+name: Build emacs-wayland
+
+on:
+  schedule:
+    - cron: '0 4 * * 0' # Every Sunday at 04:00 UTC
+  workflow_dispatch:     # Manual trigger via GitHub UI or gh CLI
+  push:
+    branches:
+      - main
+    paths:
+      - 'PKGBUILD'
+      - '.github/workflows/**'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies & setup build user
+        run: |
+          pacman -Syu --noconfirm --needed \
+            git sudo texinfo gtk3 webkit2gtk-4.1 libgccjit tree-sitter alsa-lib libotf
+          useradd -m -G wheel builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          chown -R builder:builder .
+
+      - name: Build package with makepkg
+        run: |
+          su builder -c "MAKEFLAGS='-j\$(nproc)' makepkg -s --noconfirm"
+
+      - name: Determine package filename and tag
+        id: pkg
+        run: |
+          PKG_NAME=$(ls emacs-wayland-*.pkg.tar.zst | grep -v debug | head -n 1)
+          VERSION=$(echo "$PKG_NAME" | sed -E 's/emacs-wayland-([0-9a-zA-Z._-]+)-x86_64\.pkg\.tar\.zst/\1/')
+          echo "file=$PKG_NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create Release and Upload Package
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.pkg.outputs.tag }}
+          name: Emacs Wayland ${{ steps.pkg.outputs.version }}
+          draft: false
+          prerelease: false
+          files: |
+            emacs-wayland-*.pkg.tar.zst
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,11 @@
+# Arch package archives and signatures
+*.pkg.tar.zst
+*.pkg.tar.zst.sig
+
+# makepkg working directories
+src/
+pkg/
+build/
+
+# Logs
+*.log
